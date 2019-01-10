@@ -1,0 +1,197 @@
+#!/usr/bin/env python
+#===============================================================================
+# gen-mnist-datasets
+#===============================================================================
+#
+#  -h --help     Display this message
+#  -v --verbose  Verbose mode
+#     --size     Dataset size to generate
+#     --labels   Binary file with labels
+#     --images   Binary file with images
+#     --out      Name to prefix output with
+#
+# This script reads the MNIST binary files for labels and images and
+# generates a smaller dataset corresponding to the first "size" images.
+# It then dumps the resulting datasets as new binary files.
+#
+# Author : Christopher Torng
+# Date   : November 17, 2017
+#
+
+import argparse
+import sys
+import struct
+import os
+
+#-------------------------------------------------------------------------
+# Command line processing
+#-------------------------------------------------------------------------
+
+class ArgumentParserWithCustomError(argparse.ArgumentParser):
+  def error( self, msg = "" ):
+    if ( msg ): print("\n ERROR: %s" % msg)
+    print("")
+    file = open( sys.argv[0] )
+    for ( lineno, line ) in enumerate( file ):
+      if ( line[0] != '#' ): sys.exit(msg != "")
+      if ( (lineno == 2) or (lineno >= 4) ): print( line[1:].rstrip("\n") )
+
+def parse_cmdline():
+  p = ArgumentParserWithCustomError( add_help=False )
+  p.add_argument( "-v", "--verbose", action="store_true"       )
+  p.add_argument( "-h", "--help",    action="store_true"       )
+  p.add_argument(       "--size",    default=10, type=int      )
+  p.add_argument(       "--labels",  default='training-labels' )
+  p.add_argument(       "--images",  default='training-images' )
+  p.add_argument(       "--out",     default='small'           )
+  opts = p.parse_args()
+  if opts.help: p.error()
+  return opts
+
+#-------------------------------------------------------------------------
+# Helpers
+#-------------------------------------------------------------------------
+#-------------------------------------------------------------------------
+# print_image
+#-------------------------------------------------------------------------
+# Print an MNIST image (i.e., a list of 28x28 chars)
+
+def print_image( image ):
+  print
+  for i in range(28):
+    print ' '*4, # indent
+    for j in range(28):
+      char = image[ i*28 + j ]
+      print '{:3}'.format(char),
+    print
+  print
+
+#-------------------------------------------------------------------------
+# read_labels
+#-------------------------------------------------------------------------
+# Read labels from binary file "fname"
+#
+# The length of each label defaults to 1 byte
+
+def read_labels( fname, num_labels, len_label = 1 ):
+
+  # Unpack these values from the binary
+  #
+  # - All throwaway 4B values that appear at the front of the file
+  # - All data in byte form
+
+  num_misc = 2 # MNIST label files have 2 throwaway values
+
+  fmt_str = '>' + ('I' * num_misc) + ('B' * num_labels * len_label)
+  fmt_len =       ( 4  * num_misc) + ( 1  * num_labels * len_label)
+
+  with open( fname, 'rb' ) as fd:
+    data = struct.unpack( fmt_str, fd.read( fmt_len ) )
+
+  return data
+
+#-------------------------------------------------------------------------
+# read_images
+#-------------------------------------------------------------------------
+# Read images from binary file "fname"
+#
+# The length of each image defaults to 28 * 28 bytes
+
+def read_images( fname, num_images, len_image = 28 * 28 ):
+
+  # Unpack these values from the binary
+  #
+  # - All throwaway 4B values that appear at the front of the file
+  # - All data in byte form
+
+  num_misc = 4 # MNIST image files have 4 throwaway values
+
+  fmt_str = '>' + ('I' * num_misc) + ('B' * num_images * len_image)
+  fmt_len =       ( 4  * num_misc) + ( 1  * num_images * len_image)
+
+  with open( fname, 'rb' ) as fd:
+    data = struct.unpack( fmt_str, fd.read( fmt_len ) )
+
+  return data
+
+#-------------------------------------------------------------------------
+# dump_labels
+#-------------------------------------------------------------------------
+# Dump labels into binary file "fname"
+#
+# The length of each label defaults to 1 byte
+
+def dump_labels( fname, data, num_labels, len_label = 1 ):
+
+  # Pack all data into the binary
+
+  num_misc = 2 # MNIST label files have 2 throwaway values
+
+  fmt_str = '>' + ('I' * num_misc) + ('B' * num_labels * len_label)
+
+  with open( fname, 'wb' ) as fd:
+    fd.write( struct.pack( fmt_str, *data ) )
+
+#-------------------------------------------------------------------------
+# dump_images
+#-------------------------------------------------------------------------
+# Dump images into binary file "fname"
+#
+# The length of each image defaults to 28 * 28 bytes
+
+def dump_images( fname, data, num_images, len_image = 28 * 28 ):
+
+  # Pack all data into the binary
+
+  num_misc = 4 # MNIST image files have 4 throwaway values
+
+  fmt_str = '>' + ('I' * num_misc) + ('B' * num_images * len_image)
+
+  with open( fname, 'wb' ) as fd:
+    fd.write( struct.pack( fmt_str, *data ) )
+
+#-------------------------------------------------------------------------
+# Main
+#-------------------------------------------------------------------------
+
+def main():
+  opts = parse_cmdline()
+
+  # Read label and image datasets
+
+  label_data = read_labels( opts.labels, opts.size )
+  image_data = read_images( opts.images, opts.size )
+
+  # Dump the smaller datasets to output binary files
+
+  labels_base = os.path.splitext( opts.labels )[0]
+  images_base = os.path.splitext( opts.images )[0]
+
+  if opts.out:
+    labels_fname = opts.out + '-' + labels_base + '-' + str(opts.size) + '.bin'
+    images_fname = opts.out + '-' + images_base + '-' + str(opts.size) + '.bin'
+    dump_labels( labels_fname, label_data, opts.size )
+    dump_images( images_fname, image_data, opts.size )
+
+  # Print out labels and images
+
+  if opts.verbose:
+
+    # Labels
+
+    print label_data
+
+    # Images
+
+    training_images = []
+
+    len_image = 28 * 28
+    for i in xrange( opts.size ):
+      training_images.append( image_data[2+i*len_image:2+(i+1)*len_image] )
+
+    for image in training_images:
+      print_image( image )
+
+main()
+
+
