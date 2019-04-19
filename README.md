@@ -11,4 +11,4 @@ cd build_eval
 cmake .. -DCMAKE_BUILD_TYPE=RELEASE
 make eval
 ```
-An evaluation report of the inference accuracy will be produced.
+An evaluation report of the prediction accuracy will be produced.
